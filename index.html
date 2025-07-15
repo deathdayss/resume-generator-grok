@@ -1,49 +1,11 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<xaiArtifact artifact_id="f68a5c02-a912-4308-a04d-4760c1e85e6e" artifact_version_id="b39effe7-d5e5-482b-bd94-553c4189af3e" title="index.html" contentType="text/html">
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shorcut icon" type="x-icon" href="resume-icon.png">
     <title>Resume Generator</title>
+    <link rel="shortcut icon" type="x-icon" href="resume-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
@@ -96,7 +58,7 @@
                         <button type="button" class="remove-job text-red-500 mt-2">Remove Job</button>
                     </div>
                 </div>
-                <button type="button" id="addJob" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Add Job</button>
+                <button type="button" id="addJob" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-2">Add Job</button>
             </div>
 
             <!-- Education -->
@@ -110,7 +72,7 @@
                         <button type="button" class="remove-education text-red-500 mt-2">Remove Education</button>
                     </div>
                 </div>
-                <button type="button" id="addEducation" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Add Education</button>
+                <button type="button" id="addEducation" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-2">Add Education</button>
             </div>
 
             <!-- Key Skills -->
@@ -129,7 +91,7 @@
                         <button type="button" class="remove-certificate text-red-500 mt-2">Remove Certificate</button>
                     </div>
                 </div>
-                <button type="button" id="addCertificate" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Add Certificate</button>
+                <button type="button" id="addCertificate" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-2">Add Certificate</button>
             </div>
 
             <!-- References -->
@@ -163,7 +125,7 @@
                         <input type="number" id="topMargin" value="20" min="5" max="30" class="border p-2 rounded w-full">
                     </div>
                 </div>
-                <button type="button" id="resetDefaults" class="bg-gray-500 text-white px-4 py-2 rounded mt-4">Reset Defaults</button>
+                <button type="button" id="resetDefaults" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded mt-4">Reset Defaults</button>
             </div>
 
             <!-- Buttons -->
@@ -175,6 +137,7 @@
                     <input type="file" id="importJson" accept=".json" class="hidden">
                 </label>
                 <button type="button" id="downloadPdfBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">Download PDF</button>
+                <button type="button" id="clearCacheBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Clear Cache</button>
             </div>
         </form>
 
@@ -301,6 +264,87 @@
             };
         }
 
+        // Load Cached Data
+        function loadCachedData() {
+            console.log('Loading cached data...');
+            const cachedData = localStorage.getItem('resumeData');
+            if (cachedData) {
+                try {
+                    const data = JSON.parse(cachedData);
+                    console.log('Cached data found:', data);
+                    document.getElementById('name').value = data.name || '';
+                    document.getElementById('location').value = data.location || '';
+                    document.getElementById('email').value = data.email || '';
+                    document.getElementById('phone').value = data.phone || '';
+                    document.getElementById('visaStatus').value = data.visaStatus || '';
+                    document.getElementById('summary').value = data.summary || '';
+                    document.getElementById('skills').value = data.skills || '';
+                    document.getElementById('references').value = data.references || '';
+
+                    // Populate PDF settings
+                    if (data.pdfSettings) {
+                        document.getElementById('headingFontSize').value = data.pdfSettings.headingFontSize || defaultSettings.headingFontSize;
+                        document.getElementById('bodyFontSize').value = data.pdfSettings.bodyFontSize || defaultSettings.bodyFontSize;
+                        document.getElementById('sectionSpacing').value = data.pdfSettings.sectionSpacing || defaultSettings.sectionSpacing;
+                        document.getElementById('leftMargin').value = data.pdfSettings.leftMargin || defaultSettings.leftMargin;
+                        document.getElementById('topMargin').value = data.pdfSettings.topMargin || defaultSettings.topMargin;
+                    }
+
+                    // Clear and populate career history
+                    const careerContainer = document.getElementById('careerHistory');
+                    careerContainer.innerHTML = '';
+                    (data.careerHistory || []).forEach(job => {
+                        addDynamicSection('careerHistory', jobTemplate, 'remove-job');
+                        const section = careerContainer.lastChild;
+                        section.querySelector('.job-title').value = job.title || '';
+                        section.querySelector('.company').value = job.company || '';
+                        section.querySelector('.job-dates').value = job.dates || '';
+                        section.querySelector('.job-description').value = job.description || '';
+                    });
+                    if (!data.careerHistory || data.careerHistory.length === 0) {
+                        addDynamicSection('careerHistory', jobTemplate, 'remove-job');
+                    }
+
+                    // Clear and populate education
+                    const educationContainer = document.getElementById('education');
+                    educationContainer.innerHTML = '';
+                    (data.education || []).forEach(edu => {
+                        addDynamicSection('education', educationTemplate, 'remove-education');
+                        const section = educationContainer.lastChild;
+                        section.querySelector('.degree').value = edu.degree || '';
+                        section.querySelector('.institution').value = edu.institution || '';
+                        section.querySelector('.edu-dates').value = edu.dates || '';
+                    });
+                    if (!data.education || data.education.length === 0) {
+                        addDynamicSection('education', educationTemplate, 'remove-education');
+                    }
+
+                    // Clear and populate certificates
+                    const certificatesContainer = document.getElementById('certificates');
+                    certificatesContainer.innerHTML = '';
+                    (data.certificates || []).forEach(cert => {
+                        addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
+                        const section = certificatesContainer.lastChild;
+                        section.querySelector('.certificate').value = cert.name || '';
+                        section.querySelector('.cert-date').value = cert.date || '';
+                    });
+                    if (!data.certificates || data.certificates.length === 0) {
+                        addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
+                    }
+                } catch (error) {
+                    console.error('Error loading cached data:', error);
+                    localStorage.removeItem('resumeData');
+                }
+            }
+        }
+
+        // Save Data to LocalStorage
+        function saveToLocalStorage() {
+            const data = collectFormData();
+            localStorage.setItem('resumeData', JSON.stringify(data));
+            console.log('Data saved to localStorage');
+        }
+
         // Reset Defaults
         document.getElementById('resetDefaults').addEventListener('click', () => {
             document.getElementById('headingFontSize').value = defaultSettings.headingFontSize;
@@ -309,6 +353,27 @@
             document.getElementById('leftMargin').value = defaultSettings.leftMargin;
             document.getElementById('topMargin').value = defaultSettings.topMargin;
             console.log('PDF settings reset to defaults');
+            saveToLocalStorage();
+        });
+
+        // Clear Cache
+        document.getElementById('clearCacheBtn').addEventListener('click', () => {
+            console.log('Clearing cache...');
+            localStorage.removeItem('resumeData');
+            document.getElementById('resumeForm').reset();
+            document.getElementById('careerHistory').innerHTML = '';
+            document.getElementById('education').innerHTML = '';
+            document.getElementById('certificates').innerHTML = '';
+            addDynamicSection('careerHistory', jobTemplate, 'remove-job');
+            addDynamicSection('education', educationTemplate, 'remove-education');
+            addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
+            document.getElementById('headingFontSize').value = defaultSettings.headingFontSize;
+            document.getElementById('bodyFontSize').value = defaultSettings.bodyFontSize;
+            document.getElementById('sectionSpacing').value = defaultSettings.sectionSpacing;
+            document.getElementById('leftMargin').value = defaultSettings.leftMargin;
+            document.getElementById('topMargin').value = defaultSettings.topMargin;
+            document.getElementById('preview').classList.add('hidden');
+            console.log('Cache cleared and form reset');
         });
 
         // Generate Preview
@@ -348,6 +413,7 @@
                 <p class="text-sm">${data.references || ''}</p>
             `;
             document.getElementById('preview').classList.remove('hidden');
+            saveToLocalStorage();
         });
 
         // Download JSON
@@ -366,6 +432,7 @@
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
                 console.log('JSON download initiated');
+                saveToLocalStorage();
             } catch (error) {
                 console.error('Error downloading JSON:', error);
                 alert('Failed to download JSON. Check console for details.');
@@ -399,7 +466,6 @@
                             document.getElementById('leftMargin').value = data.pdfSettings.leftMargin || defaultSettings.leftMargin;
                             document.getElementById('topMargin').value = data.pdfSettings.topMargin || defaultSettings.topMargin;
                         } else {
-                            // Use defaults if pdfSettings is missing
                             document.getElementById('headingFontSize').value = defaultSettings.headingFontSize;
                             document.getElementById('bodyFontSize').value = defaultSettings.bodyFontSize;
                             document.getElementById('sectionSpacing').value = defaultSettings.sectionSpacing;
@@ -448,6 +514,10 @@
                         if (!data.certificates || data.certificates.length === 0) {
                             addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
                         }
+
+                        // Save imported data to localStorage
+                        localStorage.setItem('resumeData', JSON.stringify(data));
+                        console.log('Imported data saved to localStorage');
                     } catch (error) {
                         console.error('Error importing JSON:', error);
                         alert('Failed to import JSON. Please ensure the file is valid.');
@@ -536,11 +606,18 @@
                 // Save PDF
                 doc.save('resume.pdf');
                 console.log('PDF download initiated');
+                saveToLocalStorage();
             } catch (error) {
                 console.error('Error downloading PDF:', error);
                 alert('Failed to download PDF. Check console for details.');
             }
         });
+
+        // Load cached data on page load
+        window.addEventListener('load', loadCachedData);
+
+        // Save data to localStorage on exit
+        window.addEventListener('beforeunload', saveToLocalStorage);
     </script>
 </body>
 </html>
