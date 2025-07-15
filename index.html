@@ -51,7 +51,11 @@
         .section { margin-bottom: 1.5rem; }
         .preview { border: 1px solid #e2e8f0; padding: 1rem; }
         .pdf-content { max-width: 800px; margin: auto; }
-        textarea { resize: vertical; }
+        textarea { 
+            resize: vertical; 
+            min-height: 60px; 
+            box-sizing: border-box; 
+        }
         .dynamic-section { border: 1px solid #e5e7eb; padding: 1rem; margin-bottom: 1rem; }
     </style>
 </head>
@@ -195,6 +199,37 @@
             topMargin: 20
         };
 
+        // Auto-resize textarea based on content
+        function autoResizeTextarea(textarea) {
+            // Reset height to auto to get accurate scrollHeight
+            textarea.style.height = 'auto';
+            // Force reflow to ensure scrollHeight is correct
+            textarea.style.height = `${textarea.scrollHeight + 2}px`; // Add 2px buffer for padding/border
+        }
+
+        // Apply auto-resize to all textareas
+        function autoResizeAllTextareas() {
+            document.querySelectorAll('textarea').forEach(textarea => {
+                autoResizeTextarea(textarea);
+                // Remove existing input listeners to prevent duplicates
+                const newTextarea = textarea.cloneNode(true);
+                textarea.parentNode.replaceChild(newTextarea, textarea);
+                newTextarea.addEventListener('input', () => autoResizeTextarea(newTextarea));
+            });
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        // Preserve line breaks by converting \n to <br>
+        function preserveLineBreaks(text) {
+            if (!text) return '';
+            return escapeHtml(text).replace(/\n/g, '<br>');
+        }
+
         // Dynamic Section Management
         function addDynamicSection(containerId, template, removeClass) {
             const container = document.getElementById(containerId);
@@ -205,6 +240,12 @@
             section.querySelector(`.${removeClass}`).addEventListener('click', () => {
                 if (container.children.length > 1) section.remove();
             });
+            // Auto-resize job description textarea in new career section
+            const textarea = section.querySelector('textarea');
+            if (textarea) {
+                autoResizeTextarea(textarea);
+                textarea.addEventListener('input', () => autoResizeTextarea(textarea));
+            }
         }
 
         // Job Template
@@ -368,10 +409,18 @@
                     if (!data.certificates || data.certificates.length === 0) {
                         addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
                     }
+
+                    // Auto-resize all textareas after loading data
+                    autoResizeAllTextareas();
                 } catch (error) {
                     console.error('Error loading cached data:', error);
                     localStorage.removeItem('resumeData');
+                    // Auto-resize initial textareas even if cache fails
+                    autoResizeAllTextareas();
                 }
+            } else {
+                // Auto-resize initial textareas if no cached data
+                autoResizeAllTextareas();
             }
         }
 
@@ -399,35 +448,35 @@
             const data = collectFormData();
             const preview = document.getElementById('resumePreview');
             preview.innerHTML = `
-                <h2 class="text-2xl font-bold text-center">${data.name || 'Your Name'}</h2>
-                <p class="text-center text-sm text-gray-600">${data.location || ''} | ${data.email || ''} | ${data.phone || ''}</p>
-                <p class="text-center text-sm text-gray-600">${data.visaStatus || ''}</p>
+                <h2 class="text-2xl font-bold text-center">${escapeHtml(data.name || 'Your Name')}</h2>
+                <p class="text-center text-sm text-gray-600">${escapeHtml(data.location || '')} | ${escapeHtml(data.email || '')} | ${escapeHtml(data.phone || '')}</p>
+                <p class="text-center text-sm text-gray-600">${escapeHtml(data.visaStatus || '')}</p>
                 <hr class="my-4">
                 <h3 class="text-lg font-semibold">Summary</h3>
-                <p class="text-sm">${data.summary || ''}</p>
+                <p class="text-sm">${preserveLineBreaks(data.summary)}</p>
                 <h3 class="text-lg font-semibold mt-4">Career History</h3>
                 ${data.careerHistory.map(job => `
                     <div class="mb-4">
-                        <p class="font-semibold">${job.title || ''} at ${job.company || ''}</p>
-                        <p class="text-sm text-gray-600">${job.dates || ''}</p>
-                        <p class="text-sm">${job.description || ''}</p>
+                        <p class="font-semibold">${escapeHtml(job.title || '')} at ${escapeHtml(job.company || '')}</p>
+                        <p class="text-sm text-gray-600">${escapeHtml(job.dates || '')}</p>
+                        <p class="text-sm">${preserveLineBreaks(job.description)}</p>
                     </div>
                 `).join('')}
                 <h3 class="text-lg font-semibold mt-4">Education</h3>
                 ${data.education.map(edu => `
                     <div class="mb-2">
-                        <p class="font-semibold">${edu.degree || ''}</p>
-                        <p class="text-sm text-gray-600">${edu.institution || ''}, ${edu.dates || ''}</p>
+                        <p class="font-semibold">${escapeHtml(edu.degree || '')}</p>
+                        <p class="text-sm text-gray-600">${escapeHtml(edu.institution || '')}, ${escapeHtml(edu.dates || '')}</p>
                     </div>
                 `).join('')}
                 <h3 class="text-lg font-semibold mt-4">Key Skills</h3>
-                <p class="text-sm">${data.skills || ''}</p>
+                <p class="text-sm">${preserveLineBreaks(data.skills)}</p>
                 <h3 class="text-lg font-semibold mt-4">Certificates</h3>
                 ${data.certificates.map(cert => `
-                    <p class="text-sm">${cert.name || ''} (${cert.date || ''})</p>
+                    <p class="text-sm">${escapeHtml(cert.name || '')} (${escapeHtml(cert.date || '')})</p>
                 `).join('')}
                 <h3 class="text-lg font-semibold mt-4">References</h3>
-                <p class="text-sm">${data.references || ''}</p>
+                <p class="text-sm">${preserveLineBreaks(data.references)}</p>
             `;
             document.getElementById('preview').classList.remove('hidden');
             saveToLocalStorage();
@@ -531,6 +580,9 @@
                         if (!data.certificates || data.certificates.length === 0) {
                             addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
                         }
+
+                        // Auto-resize all textareas after importing data
+                        autoResizeAllTextareas();
 
                         // Save imported data to localStorage
                         localStorage.setItem('resumeData', JSON.stringify(data));
