@@ -1,0 +1,545 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .section { margin-bottom: 1.5rem; }
+        .preview { border: 1px solid #e2e8f0; padding: 1rem; }
+        .pdf-content { max-width: 800px; margin: auto; }
+        textarea { resize: vertical; }
+        .dynamic-section { border: 1px solid #e5e7eb; padding: 1rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-center">Resume Generator</h1>
+        
+        <!-- Resume Form -->
+        <form id="resumeForm" class="space-y-6">
+            <!-- Basic Information -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">Basic Information</h2>
+                <div class="grid grid-cols-1 gap-4">
+                    <input type="text" id="name" placeholder="Full Name" class="border p-2 rounded w-full">
+                    <input type="text" id="location" placeholder="Location (e.g., Sydney, NSW, Australia)" class="border p-2 rounded w-full">
+                    <input type="email" id="email" placeholder="Email" class="border p-2 rounded w-full">
+                    <input type="tel" id="phone" placeholder="Phone Number" class="border p-2 rounded w-full">
+                </div>
+            </div>
+
+            <!-- Visa Status -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">Visa Status</h2>
+                <input type="text" id="visaStatus" placeholder="Visa Status (e.g., Permanent Resident)" class="border p-2 rounded w-full">
+            </div>
+
+            <!-- Summary -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">Summary</h2>
+                <textarea id="summary" placeholder="Professional Summary" class="border p-2 rounded w-full" rows="4"></textarea>
+            </div>
+
+            <!-- Career History -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">Career History</h2>
+                <div id="careerHistory">
+                    <div class="dynamic-section">
+                        <input type="text" class="job-title border p-2 rounded w-full mb-2" placeholder="Job Title">
+                        <input type="text" class="company border p-2 rounded w-full mb-2" placeholder="Company">
+                        <input type="text" class="job-dates border p-2 rounded w-full mb-2" placeholder="Dates (e.g., Jan 2020 - Dec 2022)">
+                        <textarea class="job-description border p-2 rounded w-full" placeholder="Job Description" rows="3"></textarea>
+                        <button type="button" class="remove-job text-red-500 mt-2">Remove Job</button>
+                    </div>
+                </div>
+                <button type="button" id="addJob" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Add Job</button>
+            </div>
+
+            <!-- Education -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">Education</h2>
+                <div id="education">
+                    <div class="dynamic-section">
+                        <input type="text" class="degree border p-2 rounded w-full mb-2" placeholder="Degree (e.g., Bachelor of Science)">
+                        <input type="text" class="institution border p-2 rounded w-full mb-2" placeholder="Institution">
+                        <input type="text" class="edu-dates border p-2 rounded w-full mb-2" placeholder="Dates (e.g., 2016 - 2020)">
+                        <button type="button" class="remove-education text-red-500 mt-2">Remove Education</button>
+                    </div>
+                </div>
+                <button type="button" id="addEducation" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Add Education</button>
+            </div>
+
+            <!-- Key Skills -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">Key Skills</h2>
+                <textarea id="skills" placeholder="List skills (e.g., Python, Project Management)" class="border p-2 rounded w-full" rows="4"></textarea>
+            </div>
+
+            <!-- Certificates -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">Certificates</h2>
+                <div id="certificates">
+                    <div class="dynamic-section">
+                        <input type="text" class="certificate border p-2 rounded w-full mb-2" placeholder="Certificate (e.g., AWS Certified Developer)">
+                        <input type="text" class="cert-date border p-2 rounded w-full mb-2" placeholder="Date (e.g., 2023)">
+                        <button type="button" class="remove-certificate text-red-500 mt-2">Remove Certificate</button>
+                    </div>
+                </div>
+                <button type="button" id="addCertificate" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Add Certificate</button>
+            </div>
+
+            <!-- References -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">References</h2>
+                <textarea id="references" placeholder="References (e.g., Available upon request)" class="border p-2 rounded w-full" rows="3"></textarea>
+            </div>
+
+            <!-- PDF Customization -->
+            <div class="section">
+                <h2 class="text-xl font-semibold mb-2">PDF Customization</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="headingFontSize" class="block text-sm font-medium">Heading Font Size (pt)</label>
+                        <input type="number" id="headingFontSize" value="12" min="8" max="20" class="border p-2 rounded w-full">
+                    </div>
+                    <div>
+                        <label for="bodyFontSize" class="block text-sm font-medium">Body Font Size (pt)</label>
+                        <input type="number" id="bodyFontSize" value="10" min="6" max="16" class="border p-2 rounded w-full">
+                    </div>
+                    <div>
+                        <label for="sectionSpacing" class="block text-sm font-medium">Section Spacing (mm)</label>
+                        <input type="number" id="sectionSpacing" value="10" min="2" max="20" class="border p-2 rounded w-full">
+                    </div>
+                    <div>
+                        <label for="leftMargin" class="block text-sm font-medium">Left Margin (mm)</label>
+                        <input type="number" id="leftMargin" value="10" min="5" max="20" class="border p-2 rounded w-full">
+                    </div>
+                    <div>
+                        <label for="topMargin" class="block text-sm font-medium">Top Margin (mm)</label>
+                        <input type="number" id="topMargin" value="20" min="5" max="30" class="border p-2 rounded w-full">
+                    </div>
+                </div>
+                <button type="button" id="resetDefaults" class="bg-gray-500 text-white px-4 py-2 rounded mt-4">Reset Defaults</button>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex space-x-4">
+                <button type="button" id="previewBtn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Preview Resume</button>
+                <button type="button" id="downloadJsonBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Download JSON</button>
+                <label class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded cursor-pointer">
+                    Import JSON
+                    <input type="file" id="importJson" accept=".json" class="hidden">
+                </label>
+                <button type="button" id="downloadPdfBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">Download PDF</button>
+            </div>
+        </form>
+
+        <!-- Preview Section -->
+        <div id="preview" class="mt-8 hidden">
+            <h2 class="text-xl font-semibold mb-4">Resume Preview</h2>
+            <div id="resumePreview" class="preview p-6 bg-white border rounded-lg pdf-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // Default PDF Settings
+        const defaultSettings = {
+            headingFontSize: 12,
+            bodyFontSize: 10,
+            sectionSpacing: 10,
+            leftMargin: 10,
+            topMargin: 20
+        };
+
+        // Dynamic Section Management
+        function addDynamicSection(containerId, template, removeClass) {
+            const container = document.getElementById(containerId);
+            const section = document.createElement('div');
+            section.className = 'dynamic-section';
+            section.innerHTML = template;
+            container.appendChild(section);
+            section.querySelector(`.${removeClass}`).addEventListener('click', () => {
+                if (container.children.length > 1) section.remove();
+            });
+        }
+
+        // Job Template
+        const jobTemplate = `
+            <input type="text" class="job-title border p-2 rounded w-full mb-2" placeholder="Job Title">
+            <input type="text" class="company border p-2 rounded w-full mb-2" placeholder="Company">
+            <input type="text" class="job-dates border p-2 rounded w-full mb-2" placeholder="Dates (e.g., Jan 2020 - Dec 2022)">
+            <textarea class="job-description border p-2 rounded w-full" placeholder="Job Description" rows="3"></textarea>
+            <button type="button" class="remove-job text-red-500 mt-2">Remove Job</button>
+        `;
+        document.getElementById('addJob').addEventListener('click', () => addDynamicSection('careerHistory', jobTemplate, 'remove-job'));
+
+        // Education Template
+        const educationTemplate = `
+            <input type="text" class="degree border p-2 rounded w-full mb-2" placeholder="Degree (e.g., Bachelor of Science)">
+            <input type="text" class="institution border p-2 rounded w-full mb-2" placeholder="Institution">
+            <input type="text" class="edu-dates border p-2 rounded w-full mb-2" placeholder="Dates (e.g., 2016 - 2020)">
+            <button type="button" class="remove-education text-red-500 mt-2">Remove Education</button>
+        `;
+        document.getElementById('addEducation').addEventListener('click', () => addDynamicSection('education', educationTemplate, 'remove-education'));
+
+        // Certificate Template
+        const certificateTemplate = `
+            <input type="text" class="certificate border p-2 rounded w-full mb-2" placeholder="Certificate (e.g., AWS Certified Developer)">
+            <input type="text" class="cert-date border p-2 rounded w-full mb-2" placeholder="Date (e.g., 2023)">
+            <button type="button" class="remove-certificate text-red-500 mt-2">Remove Certificate</button>
+        `;
+        document.getElementById('addCertificate').addEventListener('click', () => addDynamicSection('certificates', certificateTemplate, 'remove-certificate'));
+
+        // Collect Form Data (including PDF settings)
+        function collectFormData() {
+            console.log('Collecting form data...');
+            const careerHistory = [];
+            document.querySelectorAll('#careerHistory .dynamic-section').forEach(section => {
+                careerHistory.push({
+                    title: section.querySelector('.job-title').value || '',
+                    company: section.querySelector('.company').value || '',
+                    dates: section.querySelector('.job-dates').value || '',
+                    description: section.querySelector('.job-description').value || ''
+                });
+            });
+
+            const education = [];
+            document.querySelectorAll('#education .dynamic-section').forEach(section => {
+                education.push({
+                    degree: section.querySelector('.degree').value || '',
+                    institution: section.querySelector('.institution').value || '',
+                    dates: section.querySelector('.edu-dates').value || ''
+                });
+            });
+
+            const certificates = [];
+            document.querySelectorAll('#certificates .dynamic-section').forEach(section => {
+                certificates.push({
+                    name: section.querySelector('.certificate').value || '',
+                    date: section.querySelector('.cert-date').value || ''
+                });
+            });
+
+            const pdfSettings = {
+                headingFontSize: parseFloat(document.getElementById('headingFontSize').value) || defaultSettings.headingFontSize,
+                bodyFontSize: parseFloat(document.getElementById('bodyFontSize').value) || defaultSettings.bodyFontSize,
+                sectionSpacing: parseFloat(document.getElementById('sectionSpacing').value) || defaultSettings.sectionSpacing,
+                leftMargin: parseFloat(document.getElementById('leftMargin').value) || defaultSettings.leftMargin,
+                topMargin: parseFloat(document.getElementById('topMargin').value) || defaultSettings.topMargin
+            };
+
+            const data = {
+                name: document.getElementById('name').value || '',
+                location: document.getElementById('location').value || '',
+                email: document.getElementById('email').value || '',
+                phone: document.getElementById('phone').value || '',
+                visaStatus: document.getElementById('visaStatus').value || '',
+                summary: document.getElementById('summary').value || '',
+                careerHistory,
+                education,
+                skills: document.getElementById('skills').value || '',
+                certificates,
+                references: document.getElementById('references').value || '',
+                pdfSettings
+            };
+            console.log('Collected data:', data);
+            return data;
+        }
+
+        // Collect PDF Settings
+        function collectPdfSettings() {
+            return {
+                headingFontSize: parseFloat(document.getElementById('headingFontSize').value) || defaultSettings.headingFontSize,
+                bodyFontSize: parseFloat(document.getElementById('bodyFontSize').value) || defaultSettings.bodyFontSize,
+                sectionSpacing: parseFloat(document.getElementById('sectionSpacing').value) || defaultSettings.sectionSpacing,
+                leftMargin: parseFloat(document.getElementById('leftMargin').value) || defaultSettings.leftMargin,
+                topMargin: parseFloat(document.getElementById('topMargin').value) || defaultSettings.topMargin
+            };
+        }
+
+        // Reset Defaults
+        document.getElementById('resetDefaults').addEventListener('click', () => {
+            document.getElementById('headingFontSize').value = defaultSettings.headingFontSize;
+            document.getElementById('bodyFontSize').value = defaultSettings.bodyFontSize;
+            document.getElementById('sectionSpacing').value = defaultSettings.sectionSpacing;
+            document.getElementById('leftMargin').value = defaultSettings.leftMargin;
+            document.getElementById('topMargin').value = defaultSettings.topMargin;
+            console.log('PDF settings reset to defaults');
+        });
+
+        // Generate Preview
+        document.getElementById('previewBtn').addEventListener('click', () => {
+            console.log('Preview button clicked');
+            const data = collectFormData();
+            const preview = document.getElementById('resumePreview');
+            preview.innerHTML = `
+                <h2 class="text-2xl font-bold text-center">${data.name || 'Your Name'}</h2>
+                <p class="text-center text-sm text-gray-600">${data.location || ''} | ${data.email || ''} | ${data.phone || ''}</p>
+                <p class="text-center text-sm text-gray-600">${data.visaStatus || ''}</p>
+                <hr class="my-4">
+                <h3 class="text-lg font-semibold">Summary</h3>
+                <p class="text-sm">${data.summary || ''}</p>
+                <h3 class="text-lg font-semibold mt-4">Career History</h3>
+                ${data.careerHistory.map(job => `
+                    <div class="mb-4">
+                        <p class="font-semibold">${job.title || ''} at ${job.company || ''}</p>
+                        <p class="text-sm text-gray-600">${job.dates || ''}</p>
+                        <p class="text-sm">${job.description || ''}</p>
+                    </div>
+                `).join('')}
+                <h3 class="text-lg font-semibold mt-4">Education</h3>
+                ${data.education.map(edu => `
+                    <div class="mb-2">
+                        <p class="font-semibold">${edu.degree || ''}</p>
+                        <p class="text-sm text-gray-600">${edu.institution || ''}, ${edu.dates || ''}</p>
+                    </div>
+                `).join('')}
+                <h3 class="text-lg font-semibold mt-4">Key Skills</h3>
+                <p class="text-sm">${data.skills || ''}</p>
+                <h3 class="text-lg font-semibold mt-4">Certificates</h3>
+                ${data.certificates.map(cert => `
+                    <p class="text-sm">${cert.name || ''} (${cert.date || ''})</p>
+                `).join('')}
+                <h3 class="text-lg font-semibold mt-4">References</h3>
+                <p class="text-sm">${data.references || ''}</p>
+            `;
+            document.getElementById('preview').classList.remove('hidden');
+        });
+
+        // Download JSON
+        document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+            console.log('Download JSON button clicked');
+            try {
+                const data = collectFormData();
+                const jsonString = JSON.stringify(data, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'resume.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                console.log('JSON download initiated');
+            } catch (error) {
+                console.error('Error downloading JSON:', error);
+                alert('Failed to download JSON. Check console for details.');
+            }
+        });
+
+        // Import JSON
+        document.getElementById('importJson').addEventListener('change', (e) => {
+            console.log('Import JSON button clicked');
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        console.log('Imported data:', data);
+                        document.getElementById('name').value = data.name || '';
+                        document.getElementById('location').value = data.location || '';
+                        document.getElementById('email').value = data.email || '';
+                        document.getElementById('phone').value = data.phone || '';
+                        document.getElementById('visaStatus').value = data.visaStatus || '';
+                        document.getElementById('summary').value = data.summary || '';
+                        document.getElementById('skills').value = data.skills || '';
+                        document.getElementById('references').value = data.references || '';
+
+                        // Populate PDF settings
+                        if (data.pdfSettings) {
+                            document.getElementById('headingFontSize').value = data.pdfSettings.headingFontSize || defaultSettings.headingFontSize;
+                            document.getElementById('bodyFontSize').value = data.pdfSettings.bodyFontSize || defaultSettings.bodyFontSize;
+                            document.getElementById('sectionSpacing').value = data.pdfSettings.sectionSpacing || defaultSettings.sectionSpacing;
+                            document.getElementById('leftMargin').value = data.pdfSettings.leftMargin || defaultSettings.leftMargin;
+                            document.getElementById('topMargin').value = data.pdfSettings.topMargin || defaultSettings.topMargin;
+                        } else {
+                            // Use defaults if pdfSettings is missing
+                            document.getElementById('headingFontSize').value = defaultSettings.headingFontSize;
+                            document.getElementById('bodyFontSize').value = defaultSettings.bodyFontSize;
+                            document.getElementById('sectionSpacing').value = defaultSettings.sectionSpacing;
+                            document.getElementById('leftMargin').value = defaultSettings.leftMargin;
+                            document.getElementById('topMargin').value = defaultSettings.topMargin;
+                        }
+
+                        // Clear and populate career history
+                        const careerContainer = document.getElementById('careerHistory');
+                        careerContainer.innerHTML = '';
+                        (data.careerHistory || []).forEach(job => {
+                            addDynamicSection('careerHistory', jobTemplate, 'remove-job');
+                            const section = careerContainer.lastChild;
+                            section.querySelector('.job-title').value = job.title || '';
+                            section.querySelector('.company').value = job.company || '';
+                            section.querySelector('.job-dates').value = job.dates || '';
+                            section.querySelector('.job-description').value = job.description || '';
+                        });
+                        if (!data.careerHistory || data.careerHistory.length === 0) {
+                            addDynamicSection('careerHistory', jobTemplate, 'remove-job');
+                        }
+
+                        // Clear and populate education
+                        const educationContainer = document.getElementById('education');
+                        educationContainer.innerHTML = '';
+                        (data.education || []).forEach(edu => {
+                            addDynamicSection('education', educationTemplate, 'remove-education');
+                            const section = educationContainer.lastChild;
+                            section.querySelector('.degree').value = edu.degree || '';
+                            section.querySelector('.institution').value = edu.institution || '';
+                            section.querySelector('.edu-dates').value = edu.dates || '';
+                        });
+                        if (!data.education || data.education.length === 0) {
+                            addDynamicSection('education', educationTemplate, 'remove-education');
+                        }
+
+                        // Clear and populate certificates
+                        const certificatesContainer = document.getElementById('certificates');
+                        certificatesContainer.innerHTML = '';
+                        (data.certificates || []).forEach(cert => {
+                            addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
+                            const section = certificatesContainer.lastChild;
+                            section.querySelector('.certificate').value = cert.name || '';
+                            section.querySelector('.cert-date').value = cert.date || '';
+                        });
+                        if (!data.certificates || data.certificates.length === 0) {
+                            addDynamicSection('certificates', certificateTemplate, 'remove-certificate');
+                        }
+                    } catch (error) {
+                        console.error('Error importing JSON:', error);
+                        alert('Failed to import JSON. Please ensure the file is valid.');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Download PDF
+        document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+            console.log('Download PDF button clicked');
+            try {
+                if (!window.jspdf || !window.jspdf.jsPDF) {
+                    throw new Error('jsPDF library not loaded');
+                }
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const data = collectFormData();
+                const settings = collectPdfSettings();
+                let y = settings.topMargin;
+                const x = settings.leftMargin;
+                const maxWidth = 210 - 2 * settings.leftMargin; // A4 width (210mm) minus margins
+
+                // Helper function to add text with wrapping
+                function addText(text, xPos, yPos, fontSize, isBold = false) {
+                    if (!text) return yPos; // Skip empty text
+                    doc.setFontSize(fontSize);
+                    doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+                    const lines = doc.splitTextToSize(text, maxWidth);
+                    doc.text(lines, xPos, yPos);
+                    return yPos + lines.length * fontSize * 0.4; // Adjust line height
+                }
+
+                // Name (use heading font size)
+                y = addText(data.name || 'Your Name', x, y, settings.headingFontSize + 4, true);
+                // Contact Info
+                y = addText(`${data.location || ''} | ${data.email || ''} | ${data.phone || ''}`, x, y, settings.bodyFontSize);
+                y = addText(data.visaStatus || '', x, y, settings.bodyFontSize);
+                y += settings.sectionSpacing;
+                doc.line(x, y, 210 - x, y); // Horizontal line
+                y += settings.sectionSpacing;
+
+                // Summary
+                y = addText('Summary', x, y, settings.headingFontSize, true);
+                y = addText(data.summary, x, y, settings.bodyFontSize);
+                y += settings.sectionSpacing;
+
+                // Career History
+                y = addText('Career History', x, y, settings.headingFontSize, true);
+                data.careerHistory.forEach(job => {
+                    y = addText(`${job.title || ''} at ${job.company || ''}`, x, y, settings.bodyFontSize, true);
+                    y = addText(job.dates, x, y, settings.bodyFontSize);
+                    y = addText(job.description, x, y, settings.bodyFontSize);
+                    y += settings.sectionSpacing / 2; // Smaller spacing between job entries
+                });
+                y += settings.sectionSpacing;
+
+                // Education
+                y = addText('Education', x, y, settings.headingFontSize, true);
+                data.education.forEach(edu => {
+                    y = addText(edu.degree, x, y, settings.bodyFontSize, true);
+                    y = addText(`${edu.institution || ''}, ${edu.dates || ''}`, x, y, settings.bodyFontSize);
+                    y += settings.sectionSpacing / 3; // Smaller spacing between education entries
+                });
+                y += settings.sectionSpacing;
+
+                // Skills
+                y = addText('Key Skills', x, y, settings.headingFontSize, true);
+                y = addText(data.skills, x, y, settings.bodyFontSize);
+                y += settings.sectionSpacing;
+
+                // Certificates
+                y = addText('Certificates', x, y, settings.headingFontSize, true);
+                data.certificates.forEach(cert => {
+                    y = addText(`${cert.name || ''} (${cert.date || ''})`, x, y, settings.bodyFontSize);
+                    y += settings.sectionSpacing / 5; // Smaller spacing between certificate entries
+                });
+                y += settings.sectionSpacing;
+
+                // References
+                y = addText('References', x, y, settings.headingFontSize, true);
+                y = addText(data.references, x, y, settings.bodyFontSize);
+                y += settings.sectionSpacing;
+
+                // Save PDF
+                doc.save('resume.pdf');
+                console.log('PDF download initiated');
+            } catch (error) {
+                console.error('Error downloading PDF:', error);
+                alert('Failed to download PDF. Check console for details.');
+            }
+        });
+    </script>
+</body>
+</html>
